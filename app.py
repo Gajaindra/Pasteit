@@ -1,9 +1,11 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, session, jsonify
+from flask_socketio import SocketIO, emit
 import uuid
 import random
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
+socketio = SocketIO(app)
 
 notes = {}
 
@@ -30,6 +32,9 @@ def save():
     token = notes.get(note_id, {}).get('token', generate_token())
     notes[note_id] = {'content': content, 'token': token}
 
+    # Emit content change to all connected clients
+    socketio.emit('content_updated', {'content': content, 'token': token}, broadcast=True)
+
     return jsonify({'token': token})
 
 @app.route('/get_content')
@@ -49,7 +54,6 @@ def refresh_token():
     if note_id in notes:
         token = generate_token()
         notes[note_id]['token'] = token
-        flash("Token refreshed successfully.")
     return redirect(url_for('index'))
 
 @app.route('/join', methods=['POST'])
@@ -59,11 +63,16 @@ def join():
         if note['token'] == token:
             session['note_id'] = note_id
             session['content'] = note['content']
-            flash("Note loaded successfully.")
             return redirect(url_for('index'))
-
-    flash("Invalid token.")
     return redirect(url_for('index'))
 
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app)
