@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, session, redirect, url_for
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 import uuid
 import random
 
@@ -45,12 +45,15 @@ def on_connect():
     print("Client connected")
 
 @socketio.on('join_room')
-def on_join(data):
+def on_join(data=None):
     note_id = session.get('note_id')
     if note_id:
-        socketio.enter_room(request.sid, note_id)
+        join_room(note_id)
         if note_id in notes:
-            emit('content_update', {'content': notes[note_id]['content'], 'token': notes[note_id]['token']})
+            emit('content_update', {
+                'content': notes[note_id]['content'],
+                'token': notes[note_id]['token']
+            }, room=request.sid)
 
 @socketio.on('update_content')
 def on_update(data):
@@ -61,7 +64,10 @@ def on_update(data):
             notes[note_id] = {'content': content, 'token': generate_token()}
         else:
             notes[note_id]['content'] = content
-        emit('content_update', {'content': content, 'token': notes[note_id]['token']}, room=note_id)
+        emit('content_update', {
+            'content': content,
+            'token': notes[note_id]['token']
+        }, room=note_id)
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
