@@ -32,6 +32,17 @@ def save():
 
     return jsonify({'token': token})
 
+@app.route('/get_content')
+def get_content():
+    note_id = session.get('note_id')
+    content = ''
+    token = None
+    if note_id and note_id in notes:
+        content = notes[note_id]['content']
+        token = notes[note_id]['token']
+        session['content'] = content
+    return jsonify({'content': content, 'token': token})
+
 @app.route('/refresh_token')
 def refresh_token():
     note_id = session.get('note_id')
