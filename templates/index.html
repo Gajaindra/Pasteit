@@ -3,61 +3,12 @@
 <head>
     <title>PasteIt</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
-    <script>
-        var socket = io.connect(location.origin);
-
-        socket.on('connect', function() {
-            console.log('Connected to server');
-        });
-
-        socket.on('content_updated', function(data) {
-            const textarea = document.querySelector('textarea[name="content"]');
-            const tokenSpan = document.getElementById('token');
-            if (textarea.value !== data.content) {
-                textarea.value = data.content;
-            }
-            if (tokenSpan.textContent !== data.token) {
-                tokenSpan.textContent = data.token;
-            }
-        });
-
-        function autoSubmitNote() {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                const content = document.querySelector('textarea[name="content"]').value;
-
-                fetch('/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ content: content })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('token').textContent = data.token;
-                });
-            }, 1000);
-        }
-
-        setInterval(() => {
-            fetch('/get_content')
-                .then(response => response.json())
-                .then(data => {
-                    const textarea = document.querySelector('textarea[name="content"]');
-                    if (textarea.value !== data.content) {
-                        textarea.value = data.content;
-                    }
-                    if (data.token) {
-                        document.getElementById('token').textContent = data.token;
-                    }
-                });
-        }, 2000);
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
     <h1>PasteIt</h1>
     <h2>Enter your text here</h2>
-    <textarea name="content" placeholder="Paste or write something..." oninput="autoSubmitNote()">{{ content }}</textarea>
+    <textarea id="content" placeholder="Paste or write something...">{{ content }}</textarea>
 
     <div id="info">
         <p><strong>Token:</strong> <span id="token">{{ token or 'None' }}</span></p>
@@ -69,5 +20,34 @@
         <input name="token" placeholder="Enter Token" maxlength="4" required>
         <button type="submit">Receive</button>
     </form>
+
+    <script>
+        const socket = io();
+        const textarea = document.getElementById('content');
+        const tokenDisplay = document.getElementById('token');
+
+        socket.on('connect', () => {
+            socket.emit('join_room');
+        });
+
+        socket.on('content_update', data => {
+            if (document.activeElement !== textarea) {
+                textarea.value = data.content;
+            }
+            tokenDisplay.textContent = data.token;
+        });
+
+        socket.on('token_updated', data => {
+            tokenDisplay.textContent = data.token;
+        });
+
+        let debounceTimer;
+        textarea.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                socket.emit('update_content', { content: textarea.value });
+            }, 500);
+        });
+    </script>
 </body>
 </html>
