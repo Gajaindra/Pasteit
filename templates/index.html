@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>PasteIt</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        function toggleTheme() {
+            document.body.classList.toggle("dark");
+        }
+
+        function submitNote(event) {
+            event.preventDefault();
+            const content = document.querySelector('textarea[name="content"]').value;
+
+            fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ content: content })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('token').textContent = data.token;
+            });
+        }
+    </script>
+</head>
+<body>
+    <h1>PasteIt</h1>
+    <button onclick="toggleTheme()">Toggle Theme</button>
+
+    <h2>Enter your text here</h2>
+    <form onsubmit="submitNote(event)">
+        <textarea name="content" placeholder="Paste or write something...">{{ content }}</textarea><br>
+        <button type="submit">Submit</button>
+    </form>
+
+    <div id="info">
+        <p><strong>Token:</strong> <span id="token">{{ token or 'None' }}</span></p>
+        <a href="{{ url_for('refresh_token') }}"><button type="button">Refresh Token</button></a>
+    </div>
+
+    <h2>Join Collaboration</h2>
+    <form action="{{ url_for('join') }}" method="POST">
+        <input name="token" placeholder="Enter Token" maxlength="4" required>
+        <button type="submit">Receive</button>
+    </form>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul style="color:red;">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+</body>
+</html>
