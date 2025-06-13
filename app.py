@@ -1,26 +1,56 @@
-from flask import Flask, render_template, request, session, redirect, url_for
-from flask_socketio import SocketIO, emit, join_room
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify
 import uuid
 import random
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-socketio = SocketIO(app)
 
 notes = {}
 
 def generate_token():
-    return str(random.randint(1000, 9999))
+    return f"{random.randint(1000, 9999)}"
 
 @app.route('/')
 def index():
+    note_id = session.get('note_id')
+    content = session.get('content', '')
+    token = notes.get(note_id, {}).get('token') if note_id else None
+    return render_template('index.html', content=content, token=token)
+
+@app.route('/save', methods=['POST'])
+def save():
+    content = request.form.get('content', '')
+    session['content'] = content
+
+    note_id = session.get('note_id')
+    if not note_id:
+        note_id = str(uuid.uuid4())[:8]
+        session['note_id'] = note_id
+
+    token = notes.get(note_id, {}).get('token', generate_token())
+    notes[note_id] = {'content': content, 'token': token}
+
+    return jsonify({'token': token})
+
+@app.route('/get_content')
+def get_content():
     note_id = session.get('note_id')
     content = ''
     token = None
     if note_id and note_id in notes:
         content = notes[note_id]['content']
         token = notes[note_id]['token']
-    return render_template('index.html', content=content, token=token)
+        session['content'] = content
+    return jsonify({'content': content, 'token': token})
+
+@app.route('/refresh_token')
+def refresh_token():
+    note_id = session.get('note_id')
+    if note_id in notes:
+        token = generate_token()
+        notes[note_id]['token'] = token
+        flash("Token refreshed successfully.")
+    return redirect(url_for('index'))
 
 @app.route('/join', methods=['POST'])
 def join():
@@ -28,46 +58,12 @@ def join():
     for note_id, note in notes.items():
         if note['token'] == token:
             session['note_id'] = note_id
+            session['content'] = note['content']
+            flash("Note loaded successfully.")
             return redirect(url_for('index'))
+
+    flash("Invalid token.")
     return redirect(url_for('index'))
-
-@app.route('/refresh_token')
-def refresh_token():
-    note_id = session.get('note_id')
-    if note_id in notes:
-        new_token = generate_token()
-        notes[note_id]['token'] = new_token
-        socketio.emit('token_updated', {'token': new_token}, room=note_id)
-    return redirect(url_for('index'))
-
-@socketio.on('connect')
-def on_connect():
-    print("Client connected")
-
-@socketio.on('join_room')
-def on_join(data=None):
-    note_id = session.get('note_id')
-    if note_id:
-        join_room(note_id)
-        if note_id in notes:
-            emit('content_update', {
-                'content': notes[note_id]['content'],
-                'token': notes[note_id]['token']
-            }, room=request.sid)
-
-@socketio.on('update_content')
-def on_update(data):
-    content = data.get('content', '')
-    note_id = session.get('note_id')
-    if note_id:
-        if note_id not in notes:
-            notes[note_id] = {'content': content, 'token': generate_token()}
-        else:
-            notes[note_id]['content'] = content
-        emit('content_update', {
-            'content': content,
-            'token': notes[note_id]['token']
-        }, room=note_id)
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    app.run(debug=True)
