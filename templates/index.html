@@ -24,8 +24,24 @@
                 .then(data => {
                     document.getElementById('token').textContent = data.token;
                 });
-            }, 1000); // Wait 1 second after typing
+            }, 1000); // Save after 1 second pause
         }
+
+        function pollForUpdates() {
+            fetch('/get_content')
+                .then(response => response.json())
+                .then(data => {
+                    const textarea = document.querySelector('textarea[name="content"]');
+                    if (textarea !== document.activeElement && textarea.value !== data.content) {
+                        textarea.value = data.content;
+                    }
+                    if (data.token) {
+                        document.getElementById('token').textContent = data.token;
+                    }
+                });
+        }
+
+        setInterval(pollForUpdates, 2000); // Poll every 2 seconds
     </script>
 </head>
 <body>
